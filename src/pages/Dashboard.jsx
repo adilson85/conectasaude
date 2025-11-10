@@ -1,28 +1,42 @@
 import { useState, useMemo } from 'react'
 import {
-  LineChart,
-  Line,
   BarChart,
   Bar,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
+  ResponsiveContainer,
   Tooltip,
   Legend,
-  ResponsiveContainer
+  Cell
 } from 'recharts'
 import mockData from '../data/mockData.json'
 import { getWeekDays, formatDateShort, getDayName } from '../utils/dateUtils'
 import { aggregateByDay, calculateWeekTotals, filterData, mapStatusToCategory } from '../utils/dataAggregation'
 import KPICard from '../components/KPICard'
+import ExportButton from '../components/ExportButton'
 import {
   calculateNoShowRate,
   calculateConfirmationRate,
   calculateAttendanceRate,
-  filterToday,
-  calculateTrend,
-  calculateDailyProgression
+  calculateTrend
 } from '../utils/kpiCalculations'
+import {
+  exportAgendamentosCSV,
+  exportRelatorioConsolidadoCSV,
+  exportDadosDiariosCSV,
+  exportAnaliseCanaisCSV,
+  exportRelatorioExecutivoCSV,
+  exportAnaliseUBSCSV
+} from '../utils/exportData'
+import {
+  calculateAnalyticsByUBS,
+  calculateAnalyticsByCanal,
+  calculateROI,
+  analyzeTrends
+} from '../utils/analytics'
 
 function Dashboard() {
   const [viewMode, setViewMode] = useState('hoje') // 'hoje', 'semana', 'semana_passada', 'periodo'
@@ -111,32 +125,45 @@ function Dashboard() {
 
   // Calcula totais da semana ou dia
   const totais = useMemo(() => {
-    // Se houver filtro de data específico ou modo "hoje", calcula totais do dia
-    if (filtros.data || viewMode === 'hoje') {
-      return {
-        agendados: dadosFiltrados.length,
-        confirmados: dadosFiltrados.filter(
-          item => item.confirmado || item.status === 'Confirmado'
-        ).length,
-        presencas: dadosFiltrados.filter(
-          item => item.status === 'Presente' || item.status === 'Compareceu'
-        ).length,
-        faltas: dadosFiltrados.filter(
-          item => item.status === 'Faltou' || item.status === 'No-show'
-        ).length,
-        cancelados: dadosFiltrados.filter(item => item.status === 'Cancelado')
-          .length
-      }
-    }
-    
     // Verifica se dadosAgregados está vazio
     if (!dadosAgregados || dadosAgregados.length === 0) {
+      // Se não há dados agregados, calcula diretamente dos dados filtrados
+      const agendados = dadosFiltrados.length // Total de agendamentos feitos pelas UBS
+      
+      const cancelados = dadosFiltrados.filter(item => item.status === 'Cancelado').length
+      // Cancelados: pessoas que receberam aviso e cancelaram
+      
+      const presencasExplicitas = dadosFiltrados.filter(
+        item => item.status === 'Presente' || item.status === 'Compareceu'
+      ).length
+      // Presenças: quantos realmente compareceram
+      
+      const faltas = dadosFiltrados.filter(
+        item => item.status === 'Faltou' || item.status === 'No-show'
+      ).length
+      // Faltas: quantos faltaram no período
+      
+      // Se não há presenças explícitas suficientes, calcula: presenças = agendados - cancelados - faltas
+      const presencas = presencasExplicitas > 0 
+        ? presencasExplicitas 
+        : Math.max(0, agendados - cancelados - faltas)
+      
+      // Confirmados: pessoas que receberam aviso E confirmaram presença
+      // Inclui: presenças + faltas + outros confirmados (que ainda não aconteceram)
+      const confirmados = dadosFiltrados.filter(
+        item => item.status !== 'Cancelado' &&
+                item.avisado === true &&
+                (item.confirmado === true || item.status === 'Confirmado' ||
+                 item.status === 'Presente' || item.status === 'Compareceu' ||
+                 item.status === 'Faltou' || item.status === 'No-show')
+      ).length
+      
       return {
-        agendados: 0,
-        confirmados: 0,
-        presencas: 0,
-        faltas: 0,
-        cancelados: 0
+        agendados,
+        confirmados,
+        presencas,
+        faltas,
+        cancelados
       }
     }
     
@@ -175,15 +202,29 @@ function Dashboard() {
     }
   }, [dadosFiltrados, viewMode])
 
+  // Prepara dados para o gráfico de barras (totais do período)
+  const graficoBarraData = useMemo(() => {
+    // Retorna dados formatados para gráfico de barras
+    return [
+      { name: 'Agendados', value: totais.agendados },
+      { name: 'Confirmados', value: totais.confirmados },
+      { name: 'Presenças', value: totais.presencas },
+      { name: 'Faltas', value: totais.faltas },
+      { name: 'Cancelados', value: totais.cancelados }
+    ].filter(item => item.value > 0) // Remove itens com valor zero
+  }, [totais])
+
   // Prepara dados para o gráfico de linha (progressão diária)
   const graficoLinhaData = useMemo(() => {
-    // Se houver filtro de data específico ou modo "hoje", não mostra gráfico de linha
-    if (filtros.data || viewMode === 'hoje') return []
+    // Não mostra gráfico para visualização "Hoje" ou quando não há dados agregados
+    if (viewMode === 'hoje' || !dadosAgregados || dadosAgregados.length === 0) {
+      return []
+    }
 
     // Se está no modo período mas não tem datas selecionadas, retorna vazio
-    if (viewMode === 'periodo' && (!dataInicio || !dataFim)) return []
-
-    if (!dadosAgregados || dadosAgregados.length === 0) return []
+    if (viewMode === 'periodo' && (!dataInicio || !dataFim)) {
+      return []
+    }
 
     return dadosAgregados.map(dia => ({
       dia: formatDateShort(dia.data),
@@ -193,8 +234,31 @@ function Dashboard() {
       Faltas: dia.faltas || 0,
       Cancelados: dia.cancelados || 0
     }))
-  }, [dadosAgregados, viewMode, dataInicio, dataFim, filtros.data])
-  
+  }, [dadosAgregados, viewMode, dataInicio, dataFim])
+
+  // Analytics avançados - análise por UBS
+  const analysisByUBS = useMemo(() => {
+    if (dadosFiltrados.length === 0) return []
+    return calculateAnalyticsByUBS(dadosFiltrados)
+  }, [dadosFiltrados])
+
+  // Analytics avançados - análise por canal
+  const analysisByCanal = useMemo(() => {
+    if (dadosFiltrados.length === 0) return []
+    return calculateAnalyticsByCanal(dadosFiltrados)
+  }, [dadosFiltrados])
+
+  // Calcula ROI
+  const roi = useMemo(() => {
+    return calculateROI(totais, kpis)
+  }, [totais, kpis])
+
+  // Analisa tendências
+  const tendencias = useMemo(() => {
+    if (!dadosAgregados || dadosAgregados.length < 2) return null
+    return analyzeTrends(dadosAgregados)
+  }, [dadosAgregados])
+
   // Cores para cada categoria
   const cores = {
     'Agendados': '#3b82f6',
@@ -226,11 +290,94 @@ function Dashboard() {
     })
   }
 
+  // Funções de exportação
+  const handleExportRelatorioConsolidado = () => {
+    const periodoTexto = viewMode === 'hoje'
+      ? `Hoje (${new Date().toLocaleDateString('pt-BR')})`
+      : viewMode === 'semana'
+      ? 'Semana Atual'
+      : viewMode === 'semana_passada'
+      ? 'Semana Passada'
+      : dataInicio && dataFim
+      ? `${new Date(dataInicio).toLocaleDateString('pt-BR')} - ${new Date(dataFim).toLocaleDateString('pt-BR')}`
+      : 'Período Personalizado'
+
+    const filename = `relatorio_consolidado_${new Date().toISOString().split('T')[0]}.csv`
+    exportRelatorioConsolidadoCSV(totais, kpis, periodoTexto, filename)
+  }
+
+  const handleExportAgendamentos = () => {
+    const filename = `agendamentos_${new Date().toISOString().split('T')[0]}.csv`
+    exportAgendamentosCSV(dadosFiltrados, filename)
+  }
+
+  const handleExportDadosDiarios = () => {
+    if (dadosAgregados && dadosAgregados.length > 0) {
+      const filename = `dados_diarios_${new Date().toISOString().split('T')[0]}.csv`
+      exportDadosDiariosCSV(dadosAgregados, filename)
+    }
+  }
+
+  const handleExportAnaliseCanais = () => {
+    if (analysisByCanal && analysisByCanal.length > 0) {
+      const filename = `analise_canais_${new Date().toISOString().split('T')[0]}.csv`
+      exportAnaliseCanaisCSV(analysisByCanal, filename)
+    }
+  }
+
+  const handleExportAnaliseUBS = () => {
+    if (analysisByUBS && analysisByUBS.length > 0) {
+      const filename = `analise_ubs_${new Date().toISOString().split('T')[0]}.csv`
+      exportAnaliseUBSCSV(analysisByUBS, filename)
+    }
+  }
+
+  const handleExportRelatorioExecutivo = () => {
+    const periodoTexto = viewMode === 'hoje'
+      ? `Hoje (${new Date().toLocaleDateString('pt-BR')})`
+      : viewMode === 'semana'
+      ? 'Semana Atual'
+      : viewMode === 'semana_passada'
+      ? 'Semana Passada'
+      : dataInicio && dataFim
+      ? `${new Date(dataInicio).toLocaleDateString('pt-BR')} - ${new Date(dataFim).toLocaleDateString('pt-BR')}`
+      : 'Período Personalizado'
+
+    const relatorio = {
+      periodo: periodoTexto,
+      totais,
+      kpis: {
+        confirmationRate: kpis.confirmationRate,
+        attendanceRate: kpis.attendanceRate,
+        noShowRate: kpis.noShowRate
+      },
+      roi,
+      analysisByUBS,
+      analysisByCanal
+    }
+
+    const filename = `relatorio_executivo_${new Date().toISOString().split('T')[0]}.csv`
+    exportRelatorioExecutivoCSV(relatorio, filename)
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center flex-wrap gap-4">
         <h2 className="text-2xl font-bold text-gray-900">Dashboard</h2>
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-3 flex-wrap items-center">
+          {/* Botão de Exportação */}
+          <ExportButton
+            onExportCSV={handleExportRelatorioConsolidado}
+            onExportAgendamentos={handleExportAgendamentos}
+            onExportDiario={viewMode !== 'hoje' ? handleExportDadosDiarios : null}
+            onExportCanais={handleExportAnaliseCanais}
+            onExportUBS={handleExportAnaliseUBS}
+            onExportExecutivo={handleExportRelatorioExecutivo}
+            disabled={dadosFiltrados.length === 0}
+          />
+
+          {/* Botões de Visualização */}
+          <div className="flex gap-2 flex-wrap">
           <button
             onClick={() => setViewMode('hoje')}
             className={`px-4 py-2 rounded-lg font-medium transition ${
@@ -271,6 +418,7 @@ function Dashboard() {
           >
             Período
           </button>
+          </div>
         </div>
       </div>
 
@@ -539,8 +687,71 @@ function Dashboard() {
         />
       </div>
 
-      {/* Gráfico de progressão diária */}
-      {viewMode !== 'hoje' && !filtros.data && (
+      {/* Gráfico de pizza */}
+      <div className="bg-white rounded-lg shadow p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">
+          {viewMode === 'hoje'
+            ? 'Hoje'
+            : viewMode === 'semana'
+            ? 'Semana Atual'
+            : viewMode === 'semana_passada'
+            ? 'Semana Passada'
+            : dataInicio && dataFim
+            ? `Período: ${new Date(dataInicio).toLocaleDateString('pt-BR')} - ${new Date(dataFim).toLocaleDateString('pt-BR')}`
+            : filtros.data
+            ? `Dia: ${new Date(filtros.data + 'T00:00:00').toLocaleDateString('pt-BR')}`
+            : 'Período Personalizado'}{' '}
+          - Distribuição de Indicadores
+        </h3>
+        {graficoBarraData.length > 0 ? (
+          <ResponsiveContainer width="100%" height={400}>
+            <BarChart
+              data={graficoBarraData}
+              margin={{ top: 20, right: 30, left: 20, bottom: 80 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis 
+                dataKey="name" 
+                angle={-45}
+                textAnchor="end"
+                height={100}
+                tick={{ fontSize: 12 }}
+              />
+              <YAxis />
+              <Tooltip 
+                formatter={(value, name) => [value, name]}
+                contentStyle={{ 
+                  backgroundColor: '#fff', 
+                  border: '1px solid #ccc', 
+                  borderRadius: '4px' 
+                }}
+              />
+              <Legend />
+              <Bar 
+                dataKey="value" 
+                radius={[8, 8, 0, 0]}
+              >
+                {graficoBarraData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={cores[entry.name] || '#3b82f6'} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="flex items-center justify-center h-96 text-gray-500">
+            <div className="text-center">
+              <p className="text-lg mb-2">
+                {viewMode === 'periodo'
+                  ? 'Selecione as datas de início e fim para visualizar os dados'
+                  : 'Nenhum dado disponível para o período selecionado'}
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Gráfico de progressão temporal (linha) */}
+      {viewMode !== 'hoje' && graficoLinhaData.length > 0 && (
         <div className="bg-white rounded-lg shadow p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">
             {viewMode === 'semana'
@@ -552,68 +763,186 @@ function Dashboard() {
               : 'Período Personalizado'}{' '}
             - Progressão Diária
           </h3>
-          {graficoLinhaData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={400}>
-              <LineChart data={graficoLinhaData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="dia" />
-                <YAxis />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#fff',
-                    border: '1px solid #ccc',
-                    borderRadius: '4px'
-                  }}
-                />
-                <Legend />
-                <Line
-                  type="monotone"
-                  dataKey="Agendados"
-                  stroke="#3b82f6"
-                  strokeWidth={2}
-                  dot={{ r: 4 }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="Confirmados"
-                  stroke="#10b981"
-                  strokeWidth={2}
-                  dot={{ r: 4 }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="Presenças"
-                  stroke="#8b5cf6"
-                  strokeWidth={2}
-                  dot={{ r: 4 }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="Faltas"
-                  stroke="#ef4444"
-                  strokeWidth={2}
-                  dot={{ r: 4 }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="Cancelados"
-                  stroke="#f59e0b"
-                  strokeWidth={2}
-                  dot={{ r: 4 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="flex items-center justify-center h-96 text-gray-500">
-              <div className="text-center">
-                <p className="text-lg mb-2">
-                  {viewMode === 'periodo'
-                    ? 'Selecione as datas de início e fim para visualizar os dados'
-                    : 'Nenhum dado disponível para o período selecionado'}
-                </p>
-              </div>
+          <ResponsiveContainer width="100%" height={400}>
+            <LineChart
+              data={graficoLinhaData}
+              margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis
+                dataKey="dia"
+                tick={{ fontSize: 12 }}
+              />
+              <YAxis />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#fff',
+                  border: '1px solid #ccc',
+                  borderRadius: '4px'
+                }}
+              />
+              <Legend />
+              <Line
+                type="monotone"
+                dataKey="Agendados"
+                stroke={cores['Agendados']}
+                strokeWidth={2}
+                dot={{ r: 4 }}
+                activeDot={{ r: 6 }}
+              />
+              <Line
+                type="monotone"
+                dataKey="Confirmados"
+                stroke={cores['Confirmados']}
+                strokeWidth={2}
+                dot={{ r: 4 }}
+                activeDot={{ r: 6 }}
+              />
+              <Line
+                type="monotone"
+                dataKey="Presenças"
+                stroke={cores['Presenças']}
+                strokeWidth={2}
+                dot={{ r: 4 }}
+                activeDot={{ r: 6 }}
+              />
+              <Line
+                type="monotone"
+                dataKey="Faltas"
+                stroke={cores['Faltas']}
+                strokeWidth={2}
+                dot={{ r: 4 }}
+                activeDot={{ r: 6 }}
+              />
+              <Line
+                type="monotone"
+                dataKey="Cancelados"
+                stroke={cores['Cancelados']}
+                strokeWidth={2}
+                dot={{ r: 4 }}
+                activeDot={{ r: 6 }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* Seção de ROI e Economia Gerada */}
+      {roi && roi.consultasRecuperadas > 0 && (
+        <div className="bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200 rounded-lg p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            ROI e Economia Gerada
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+            <div className="bg-white rounded-lg p-4 shadow-sm">
+              <div className="text-sm text-gray-600 mb-1">Consultas Recuperadas</div>
+              <div className="text-2xl font-bold text-green-600">{roi.consultasRecuperadas}</div>
             </div>
-          )}
+            <div className="bg-white rounded-lg p-4 shadow-sm">
+              <div className="text-sm text-gray-600 mb-1">Economia Gerada</div>
+              <div className="text-2xl font-bold text-green-600">R$ {parseFloat(roi.economiaGerada).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+            </div>
+            <div className="bg-white rounded-lg p-4 shadow-sm">
+              <div className="text-sm text-gray-600 mb-1">Custo Total</div>
+              <div className="text-2xl font-bold text-gray-700">R$ {parseFloat(roi.custoTotal).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+            </div>
+            <div className="bg-white rounded-lg p-4 shadow-sm">
+              <div className="text-sm text-gray-600 mb-1">ROI</div>
+              <div className="text-2xl font-bold text-emerald-600">{roi.roi}%</div>
+            </div>
+            <div className="bg-white rounded-lg p-4 shadow-sm">
+              <div className="text-sm text-gray-600 mb-1">Economia Líquida</div>
+              <div className="text-2xl font-bold text-emerald-700">R$ {parseFloat(roi.economiaLiquida).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Top 5 UBS - Melhor Desempenho */}
+      {analysisByUBS && analysisByUBS.length > 0 && (
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <svg className="w-6 h-6 text-cyan-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+            </svg>
+            Top 5 UBS - Melhor Desempenho (Taxa de Presença)
+          </h3>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">UBS</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Região</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Agendados</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Presenças</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Taxa Presença</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Taxa No-Show</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {analysisByUBS.slice(0, 5).map((ubs, index) => (
+                  <tr key={ubs.ubs} className={index === 0 ? 'bg-green-50' : ''}>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{ubs.ubs}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{ubs.regiao}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{ubs.agendados}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{ubs.presencas}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-green-600">{ubs.taxaPresenca}%</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600">{ubs.taxaNoShow}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Análise de Canais de Comunicação */}
+      {analysisByCanal && analysisByCanal.length > 0 && (
+        <div className="bg-white rounded-lg shadow p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+            Efetividade dos Canais de Comunicação
+          </h3>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Canal</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Enviados</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Confirmados</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Presenças</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Taxa Resposta</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Taxa Efetividade</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Taxa No-Show</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {analysisByCanal.map((canal, index) => (
+                  <tr key={canal.canal} className={index === 0 ? 'bg-indigo-50' : ''}>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      {canal.canal}
+                      {index === 0 && <span className="ml-2 text-xs text-indigo-600 font-semibold">Mais efetivo</span>}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{canal.enviados}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{canal.confirmados}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{canal.presencas}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-blue-600">{canal.taxaResposta}%</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-green-600">{canal.taxaEfetividade}%</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600">{canal.taxaNoShow}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

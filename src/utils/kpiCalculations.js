@@ -35,13 +35,20 @@ export function calculateNoShowRate(data) {
 }
 
 /**
- * Calcula taxa de confirmação (confirmados / total)
+ * Calcula taxa de confirmação (confirmados / total de agendados)
+ * Confirmados = pessoas que receberam aviso E confirmaram presença
  */
 export function calculateConfirmationRate(data) {
   if (data.length === 0) return 0;
 
+  // Confirmados = receberam aviso E confirmaram (confirmado = true OU status = "Confirmado")
+  // Exclui cancelados (eles cancelaram quando receberam o aviso)
   const confirmados = data.filter(
-    item => item.confirmado === true || item.status === 'Confirmado'
+    item => item.status !== 'Cancelado' &&
+            item.avisado === true &&
+            (item.confirmado === true || item.status === 'Confirmado' || 
+             item.status === 'Presente' || item.status === 'Compareceu' ||
+             item.status === 'Faltou' || item.status === 'No-show')
   ).length;
 
   return (confirmados / data.length) * 100;

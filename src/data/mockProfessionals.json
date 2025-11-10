@@ -1,0 +1,277 @@
+[
+  {
+    "id": 1,
+    "nome": "Dr. Carlos Eduardo Mendes",
+    "tipo": "medico",
+    "especialidade": "Clínico Geral",
+    "ubs": "Aventureiro I",
+    "regiao": "Centro",
+    "horarios": [
+      {
+        "dia": "Segunda",
+        "inicio": "08:00",
+        "fim": "12:00"
+      },
+      {
+        "dia": "Quarta",
+        "inicio": "08:00",
+        "fim": "12:00"
+      },
+      {
+        "dia": "Sexta",
+        "inicio": "08:00",
+        "fim": "12:00"
+      }
+    ],
+    "vagasPorHorario": 16,
+    "ativo": true
+  },
+  {
+    "id": 2,
+    "nome": "Dra. Ana Paula Silva",
+    "tipo": "medico",
+    "especialidade": "Pediatria",
+    "ubs": "Aventureiro I",
+    "regiao": "Centro",
+    "horarios": [
+      {
+        "dia": "Segunda",
+        "inicio": "14:00",
+        "fim": "18:00"
+      },
+      {
+        "dia": "Terça",
+        "inicio": "14:00",
+        "fim": "18:00"
+      },
+      {
+        "dia": "Quinta",
+        "inicio": "14:00",
+        "fim": "18:00"
+      }
+    ],
+    "vagasPorHorario": 12,
+    "ativo": true
+  },
+  {
+    "id": 3,
+    "nome": "Dr. Roberto Almeida Santos",
+    "tipo": "medico",
+    "especialidade": "Ginecologia",
+    "ubs": "Aventureiro I",
+    "regiao": "Centro",
+    "horarios": [
+      {
+        "dia": "Terça",
+        "inicio": "08:00",
+        "fim": "12:00"
+      },
+      {
+        "dia": "Quinta",
+        "inicio": "08:00",
+        "fim": "12:00"
+      }
+    ],
+    "vagasPorHorario": 8,
+    "ativo": true
+  },
+  {
+    "id": 4,
+    "nome": "Dra. Mariana Costa Oliveira",
+    "tipo": "medico",
+    "especialidade": "Cardiologia",
+    "ubs": "Aventureiro I",
+    "regiao": "Centro",
+    "horarios": [
+      {
+        "dia": "Quarta",
+        "inicio": "14:00",
+        "fim": "17:00"
+      },
+      {
+        "dia": "Sexta",
+        "inicio": "14:00",
+        "fim": "17:00"
+      }
+    ],
+    "vagasPorHorario": 6,
+    "ativo": true
+  },
+  {
+    "id": 5,
+    "nome": "Enf. Juliana Rodrigues",
+    "tipo": "enfermeira",
+    "especialidade": "Triagem e Curativos",
+    "ubs": "Aventureiro I",
+    "regiao": "Centro",
+    "horarios": [
+      {
+        "dia": "Segunda",
+        "inicio": "08:00",
+        "fim": "14:00"
+      },
+      {
+        "dia": "Terça",
+        "inicio": "08:00",
+        "fim": "14:00"
+      },
+      {
+        "dia": "Quarta",
+        "inicio": "08:00",
+        "fim": "14:00"
+      },
+      {
+        "dia": "Quinta",
+        "inicio": "08:00",
+        "fim": "14:00"
+      },
+      {
+        "dia": "Sexta",
+        "inicio": "08:00",
+        "fim": "14:00"
+      }
+    ],
+    "vagasPorHorario": 24,
+    "ativo": true
+  },
+  {
+    "id": 6,
+    "nome": "Enf. Patricia Fernandes",
+    "tipo": "enfermeira",
+    "especialidade": "Vacinação",
+    "ubs": "Aventureiro I",
+    "regiao": "Centro",
+    "horarios": [
+      {
+        "dia": "Segunda",
+        "inicio": "08:00",
+        "fim": "12:00"
+      },
+      {
+        "dia": "Terça",
+        "inicio": "08:00",
+        "fim": "12:00"
+      },
+      {
+        "dia": "Quarta",
+        "inicio": "08:00",
+        "fim": "12:00"
+      },
+      {
+        "dia": "Quinta",
+        "inicio": "08:00",
+        "fim": "12:00"
+      },
+      {
+        "dia": "Sexta",
+        "inicio": "08:00",
+        "fim": "12:00"
+      }
+    ],
+    "vagasPorHorario": 20,
+    "ativo": true
+  },
+  {
+    "id": 7,
+    "nome": "Enf. Renata Souza Lima",
+    "tipo": "enfermeira",
+    "especialidade": "Pré-Natal",
+    "ubs": "Aventureiro I",
+    "regiao": "Centro",
+    "horarios": [
+      {
+        "dia": "Segunda",
+        "inicio": "14:00",
+        "fim": "17:00"
+      },
+      {
+        "dia": "Quarta",
+        "inicio": "14:00",
+        "fim": "17:00"
+      },
+      {
+        "dia": "Sexta",
+        "inicio": "14:00",
+        "fim": "17:00"
+      }
+    ],
+    "vagasPorHorario": 9,
+    "ativo": true
+  },
+  {
+    "id": 8,
+    "nome": "Téc. João Pedro Santos",
+    "tipo": "tecnico",
+    "especialidade": "Ultrassom",
+    "ubs": "Aventureiro I",
+    "regiao": "Centro",
+    "horarios": [
+      {
+        "dia": "Segunda",
+        "inicio": "08:00",
+        "fim": "12:00"
+      },
+      {
+        "dia": "Quarta",
+        "inicio": "08:00",
+        "fim": "12:00"
+      },
+      {
+        "dia": "Sexta",
+        "inicio": "08:00",
+        "fim": "12:00"
+      }
+    ],
+    "vagasPorHorario": 8,
+    "ativo": true
+  },
+  {
+    "id": 9,
+    "nome": "Téc. Camila Pereira",
+    "tipo": "tecnico",
+    "especialidade": "Raio-X",
+    "ubs": "Aventureiro I",
+    "regiao": "Centro",
+    "horarios": [
+      {
+        "dia": "Terça",
+        "inicio": "08:00",
+        "fim": "17:00"
+      },
+      {
+        "dia": "Quinta",
+        "inicio": "08:00",
+        "fim": "17:00"
+      }
+    ],
+    "vagasPorHorario": 18,
+    "ativo": true
+  },
+  {
+    "id": 10,
+    "nome": "Téc. Lucas Martins",
+    "tipo": "tecnico",
+    "especialidade": "Eletrocardiograma",
+    "ubs": "Aventureiro I",
+    "regiao": "Centro",
+    "horarios": [
+      {
+        "dia": "Segunda",
+        "inicio": "14:00",
+        "fim": "17:00"
+      },
+      {
+        "dia": "Quarta",
+        "inicio": "14:00",
+        "fim": "17:00"
+      },
+      {
+        "dia": "Sexta",
+        "inicio": "14:00",
+        "fim": "17:00"
+      }
+    ],
+    "vagasPorHorario": 9,
+    "ativo": true
+  }
+]

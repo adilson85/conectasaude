@@ -1,0 +1,24 @@
+[
+  {
+    "id": 1,
+    "email": "secretaria@teste.com",
+    "senha": "teste123",
+    "nome": "Secretaria Municipal de Saúde",
+    "cargo": "Secretário(a) de Saúde",
+    "role": "secretaria",
+    "ubs": null,
+    "regiao": null,
+    "permissoes": ["dashboard", "agendamentos", "relatorios", "filas", "analytics", "export"]
+  },
+  {
+    "id": 2,
+    "email": "aventureiro1@teste.com",
+    "senha": "teste123",
+    "nome": "Maria Silva Santos",
+    "cargo": "Gestor(a) da UBS",
+    "role": "gestor_ubs",
+    "ubs": "Aventureiro I",
+    "regiao": "Centro",
+    "permissoes": ["dashboard_ubs", "agendamentos_ubs", "relatorios_ubs"]
+  }
+]
